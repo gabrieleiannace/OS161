@@ -130,3 +130,173 @@ Nel caso in cui l'esecuzione vada in crash o si interrompa (esecuzione del primo
 ![Untitled](Untitled%204.png)
 
 Questi comandi inseriscono simboli diversi per ogni versione del sistema operativo di interesse. Attenzione: nonostante abbiamo definito più simboli, dobbiamo eseguirne solo uno (nell'immagine di esempio eseguiamo solo `dbos161t`). Una volta compreso questo, chiudiamo il file e eseguiamo `dbos161t`, impostiamo alcuni breakpoint con i comandi `b kmain`, `b thread_create`, `b thread_yield`, `b thread_fork`, `b thread_destroy` e poi lanciamo il comando `continue` per debuggare un po' il codice. Eseguendo `up` (UP stack), vediamo la funzione che chiama la funzione del breakpoint.
+
+---
+
+# [LAB IN PRESENZA] Configurazione del Kernel tramite Visual Studio Code
+
+Il professore illustra come risolvere le problematiche utilizzando *Visual Studio Code* (VS Code). Per iniziare, è necessario aprire VS Code e selezionare `Terminal` → `Run Task`. A questo punto, dovrebbero comparire delle operazioni relative a `os161`. Se non si visualizzano, significa che l'ambiente non è correttamente collegato a `os161`. In tal caso, si dovrebbero utilizzare dei file JSON che, in teoria, sono già preinstallati nella VM del professore.
+
+Nelle risorse del Laboratorio 1 è disponibile un file che mostra come configurare VS Code. Tuttavia, se si utilizza la VM del professore, non dovrebbero esserci problemi.
+
+# Compilazione del Kernel tramite Visual Studio Code
+
+Una volta configurato l'ambiente, il professore mostra come compilare il codice tramite VS Code. Occorre selezionare `Terminal` → `Run task` → `Run config` e inserire la versione che si desidera configurare. Nella cartella `os161-base-2.0.3` → `term` → `conf`, sono presenti 4 configurazioni/branch predefinite di `os161`: `DUMBVM` e `generic`.
+
+Il professore sconsiglia l'utilizzo delle versioni OTP in quanto sono versioni ottimizzate e l'ottimizzatore potrebbe non mostrare le cose che ci si aspetta. Quindi, si consiglia di eseguire `Run task`, `Run config` e scrivere `DUMBVM`. Se tutto funziona correttamente, si può procedere con `Make Depend`.
+
+Navigando, poi, nella cartella `/kern/compile`, si noteranno alcuni file `.h`, dei file `.c` e alcuni `Makefile`. Selezionando `Terminal` → `Run task` → `Make depend` → `Dumbvm`, si avviano alcune azioni che generano numerosi file `.c` in `/kern/compile/DUMBVM`. In sostanza, `Make Depend` genera un albero delle dipendenze che permette di ricompilare solo i file `.c` dei rispettivi `.h` che sono stati modificati.
+
+Infine, esiste l'opzione `Build and Install` (in cui si scrive `DUMBVM`), che corrisponde a `bmake`. Se funziona correttamente, l'eseguibile viene copiato nella cartella di esecuzione, come avviene nei progetti professionali.
+
+# Debug e Modifica del Kernel
+
+Nella cartella `os161/root`, compaiono `kernel` e `kernel-DUMBVM`. Se si esegue solo `bmake` e non `bmake install`, significa che si è compilato e linkato il codice, ma non si sta eseguendo la nuova versione appena creata. Per risolvere questo problema, in VS Code, `Build and Install` sono combinati in un'unica opzione.
+
+Per avviare il debugger, si può fare `Terminal` → `Run task` → `Run os161`, che attiva uno dei due lati della finestra di debug nella finestra del terminale. Successivamente, si può fare `Run` → `Start Debugging`. Il professore suggerisce di impostare dei breakpoint e di eseguire in modalità debug per verificare il corretto funzionamento.
+
+Successivamente, il professore spiega come aggiungere nuove istruzioni e come abilitarle o disabilitarle. Ad esempio, si può aggiungere sotto `boot()` una `kprintf("HELLO\\n");`. Per compilarla, si può sfruttare `DUMBVM`. Quindi, si deve fare `Terminal` → `Run task` → `Build and Install` → scrivere `DUMBVM`. Successivamente, per eseguirlo, si può fare `Terminal` → `Run task` → `Run os161` e poi fare `Run` → `Start Debugging`. Se si esegue passo per passo, si può verificare che nel terminale sotto esegua la `kprintf` che è stata scritta.
+
+Per rendere abilitabile o disabilitabile l'istruzione, si possono utilizzare gli switch di compilazione. Ad esempio:
+
+```c
+#if KERN_HELLO
+kprintf("HELLO\\n");
+#endif
+
+```
+
+Questo significa che se `KERN_HELLO` è definito (vero), allora usa questa istruzione, altrimenti non la usa.
+
+Per poter usare `KERN_HELLO`, si deve definire all'inizio del file:
+
+```c
+#define KERN_HELLO 1
+
+```
+
+In questo caso, `KERN_HELLO` è abilitato di default. Se fosse stato impostato a zero, la nostra `kprintf` non avrebbe funzionato. Il problema è che per attivare o disabilitare la funzione, bisogna ricordarsi dove andare a modificare il file `.c`, cosa che può risultare scomoda.
+
+Per risolvere questo problema, si può procedere in modo diverso, utilizzando dei simboli già definiti. Infatti, guardando in `/kern/compile/opt-dumbvm.h`, si scopre che è definito `#define OPT_DUMBVM 1`. Quindi, nel file principale, si può includere questo file con `#include “opt-dumbvm.h”` e, al posto di `KERN_HELLO`, si può scrivere `OPT_DUMBVM`.
+
+A questo punto, si può provare a compilare con `Run task` → `Build and Install`, ecc. (qui, in teoria, sarebbe opportuno rigenerare il grado delle dipendenze).
+
+Per disabilitare l'opzione, non si deve andare in `opt-dumbvm.h` e scrivere `0`, perché questo creerebbe problemi con le cose che vengono generate automaticamente. Al contrario, si deve modificare la generazione automatica. Quindi, si deve andare in `/kern/conf/DUMBVM` e cercare `options dumbvm`.
+
+Se questa opzione esiste, allora il suo valore è `1`. Se la si commenta mettendo `#` prima di `option dumbvm`, allora si pone a zero il `define`. Se si ricompila e si va a vedere in `opt-dumbvm.h`, si vede che l'autogenerazione ora lo ha impostato a zero.
+
+Il problema qui è che disabilitando `options dumbvm` si disabilita qualcosa che non serviva solo per abilitare o disabilitare la `kprintf`, creando quindi problemi. Per risolvere questo problema, è necessario creare una propria opzione di compilazione, diversa da `DUMBVM`.
+
+Quindi, si deve decommentare `option dumbvm` (rimuovendo `#`), andare in `/kern/conf.kern` e aggiungere:
+
+```c
+defoption hello
+
+```
+
+Poi, si salva e si esce.
+
+A questo punto, si può eseguire `Run task` → `Run config` e scrivere `DUMBVM`. Se si va in `/os161-base/kern/compile/opt-hello.h`, si vede che ora è definito `#define OPT_HELLO 0`. Quindi, se si va in `DUMBVM` e si aggiunge `option hello`, `OPT_HELLO` viene automaticamente impostato a `1`.
+
+Quindi, prima di `kprintf`, si può usare:
+
+```c
+#if OPT_HELLO
+kprintf
+#endif
+
+```
+
+A questo punto, conviene creare una propria versione del sistema operativo, lasciando inalterata la versione `DUMBVM`. In sostanza, si desidera generare un branch che si chiama `HELLO`. Quindi, si deve fare `Run task` →  `Copy Config` e inserire il nome `HELLO`.
+
+D'ora in poi, dove prima si scriveva `DUMBVM`, si deve scrivere `HELLO`. Infatti, in `/os161-base/compile` si trova anche il file `HELLO`. Se si va in `/os161/root`, si trova `kernel-HELLO` e `kernel`, che è un collegamento simbolico che ora punta a `kernel-HELLO`. Infatti, se si esegue ora `sys161 kernel`, si avvia la versione `HELLO` del kernel.
+
+# Creazione di una Nuova Funzione in C
+
+Ora, si inizia a lavorare in C. Si può creare la funzione `hello();` nel seguente modo:
+
+```c
+boot();
+
+#if OPT_HELLO
+hello();
+#endif
+
+```
+
+Per generare un proprio file, si può copiare `main.c` da `os161-base/main` e rinominarlo `hello.c`, cancellando tutto tranne gli `include`. In `hello.c`, si può definire una nuova funzione:
+
+```c
+void hello(void) {
+  kprintf("HELLO 2\\n");
+}
+
+```
+
+A questo punto, si può fare `Terminal` → `Build and Install` → `HELLO` e si ottiene un errore che indica che in `main.c` c'è una dichiarazione implicita. Il problema è che qualsiasi funzione si chiama, non c'è scritto il prototipo sopra. Se si scrive il prototipo, si ottiene un "undefined reference". Questo è un errore non di compilazione, ma di linking, ovvero non ha inserito in compilazione `hello.c`. Quindi, bisogna scrivere il prototipo nel file.
+
+Per risolvere questo problema, si va in `/conf.kern` e dopo `defoption hello` si scrive:
+
+```c
+file main/hello.c
+
+```
+
+Poi, si esegue nuovamente `make depend` e poi `build and install` e dovrebbe funzionare!
+
+Tuttavia, si ottiene un errore. Anche in `hello.c`, bisogna inserire il prototipo prima della funzione:
+
+```c
+void hello(void);
+
+```
+
+Se si ricompila ora, la compilazione procede senza errori. Quindi, si può eseguire `sys161 kernel`.
+
+Tuttavia, non è comodo dover gestire tutti i prototipi nei file `.c`. Quindi, bisogna crearsi i file `.h`. Si può generare il file `.h` in `/kern/include` copiando un file qualunque e rinominandolo `hello.h`. A questo punto, si apre `hello.h` e si cancella tutto, sostituendolo con:
+
+```c
+#ifndef HELLO_H
+#define HELLO_H
+
+void hello(void);
+
+#endif
+
+```
+
+In questo modo, si collega il modulo in `hello.c`, rimuovendo il prototipo e inserendo `#include "hello.h"`. Si deve fare lo stesso anche in `main.c`.
+
+A questo punto, si può ricompilare a partire da `make depend`.
+
+Se si va in `kern/conf/hello` e si disabilita `options hello`, si salva e si rigira la configurazione. Così facendo, si disabilita la chiamata, ma la funzione è ancora presente. Come si può rimuovere la funzione dal kernel se non è abilitata?
+
+Per risolvere questo problema, si va in `conf.kern` e invece di scrivere:
+
+```c
+file main/hello.c
+
+```
+
+si scrive:
+
+```c
+optfile hello main/hello.c
+
+```
+
+In questo modo, il file diventa opzionale e viene preso in considerazione solo se definito. In questo modo, si alleggerisce il kernel.
+
+---
+
+## Creazione dei Thread
+
+Per iniziare, creiamo una nuova configurazione per il nostro sistema operativo. Utilizziamo la funzione 'Copia Configurazione' e la rinominiamo `THREADS`. Non apportiamo alcuna modifica a questa configurazione. Successivamente, eseguiamo `RUN CONFIG` e scriviamo `THREADS`, seguito da `make depend`. Infine, eseguiamo `Build and Install`. Ora, possiamo osservare come vengono generati i thread e come effettuare il debug su di essi.
+
+Per avviare il processo, eseguiamo `run os161` e avviamo la modalità di debug. Proseguiamo con il comando `step into` nella funzione `menu(argoments)`. Arriviamo quindi a `kgets`. Ora, sul terminale, proviamo a scrivere `tt1`. Se posizioniamo il mouse sopra `buf`, vediamo che esso contiene `tt1`. Possiamo anche aggiungere `buf` alla sezione "watch" della colonna a destra in VS Code. In alternativa, possiamo andare nella console di debug di VS Code e digitare `-exec print buf` (questi sono i comandi di GDB preceduti da `-exec`).
+
+Continuiamo con il debug fino a `cmd_dispatch`, la funzione che esegue il comando, e eseguiamo `step into`. Posizioniamo un breakpoint su `gettime(&before)`. Vediamo `.func(…)`, che è un puntatore a funzione, e facciamo `step into`. Dovrebbe apparire `threadtest` che inizializza un semaforo e avvia `runthreads`. Facciamo `step into` su quest'ultima.
+
+Posizioniamo un breakpoint sull'ultimo `for` e vi saltiamo sopra. Se eseguiamo il debug passo a passo, vediamo che ci sono delle stampe. Da notare che ad uno step di un thread potrebbero corrispondere n step di altri thread. In sostanza, quando si utilizza il debugger passo a passo su un thread, perdiamo il controllo degli step degli altri thread.
+
+Per debuggare un altro thread, dobbiamo interrompere il debugger e farlo ripartire con `Run Os161` e poi `Run → Start Debugging`. In seguito, posizioniamo un breakpoint su `runthreads` tramite la finestra a destra di VS Code e avviamo l'esecuzione fino a quando non raggiungiamo `runthreads`. Infine, posizioniamo un breakpoint su `loudthread` (ovvero la funzione che viene chiamata) sempre tramite la GUI di VS Code a destra. Vediamo che si stampa `120`, il proprio numero di thread. Se proviamo ad andare avanti passo a passo, l'esecuzione si interrompe ad ogni thread che chiama questa funzione. Se, invece, vogliamo seguire la vita di un solo thread, ??????
